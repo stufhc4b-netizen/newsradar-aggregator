@@ -56,7 +56,7 @@ FEEDS = [
     # 6. Росія / регіон
     ("RFE/RL", "https://www.rferl.org/api/zrqiteuuir", "russia"),
     ("Moscow Times", "https://www.themoscowtimes.com/rss/news", "russia"),
-    ("Kyiv Independent", "https://kyivindependent.com/feed/", "russia"),
+    ("Kyiv Independent", "https://kyivindependent.com/news-archive/rss/", "russia"),
     # 7. Google News — закриті видання (site:, 48h)
     ("GN: WSJ", gn("site:wsj.com when:48h"), "gnews_site"),
     ("GN: FT", gn("site:ft.com when:48h"), "gnews_site"),
@@ -71,6 +71,11 @@ FEEDS = [
     ("GN тема: НАТО", gn('NATO OR "troop withdrawal" OR "defense spending" when:48h'), "gnews_topic"),
     ("GN тема: Росія/нафта", gn('Russia sanctions OR "oil price" OR refinery when:48h'), "gnews_topic"),
     ("GN тема: ЄС", gn('"European Union" enlargement OR accession Ukraine when:48h'), "gnews_topic"),
+    # 9. Страховка для капризних прямих фідів — через Google News site:
+    ("GN: Euronews", gn("site:euronews.com when:48h"), "gnews_backup"),
+    ("GN: RFE/RL", gn("site:rferl.org when:48h"), "gnews_backup"),
+    ("GN: Foreign Affairs", gn("site:foreignaffairs.com when:48h"), "gnews_backup"),
+    ("GN: Kyiv Independent", gn("site:kyivindependent.com when:48h"), "gnews_backup"),
 ]
 
 # ── Парсинг дат ──────────────────────────────────────────────────────────────
@@ -109,22 +114,39 @@ def clean(text):
     return text[:600]                            # обмежити анонс
 
 def unwrap_google(url):
-    """Google News дає редирект news.google.com/rss/articles/... — пробуємо дістати оригінал."""
+    """Google News дає редирект news.google.com/rss/articles/... .
+    Інколи прямий лінк лежить у параметрі url= — тоді витягуємо його.
+    Сучасні Google-ідентифікатори (CBMi...) статично не декодуються — лишаємо як є;
+    прямий URL для зведеної таблиці відновлюється пошуком за заголовком на етапі верстки."""
     if "news.google.com" not in url:
         return url
-    # інколи прямий лінк лежить у параметрі url=
     try:
         q = parse_qs(urlparse(url).query)
         if "url" in q:
             return unquote(q["url"][0])
     except Exception:
         pass
-    return url  # якщо не вийшло — лишаємо редирект, прямий лінк дотягне аналітик
+    return url
 
-def fetch(url, timeout=25):
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.read()
+def fetch(url, timeout=30, retries=2):
+    """Завантаження з ретраями та браузерними заголовками (деякі сервери ріжуть «голі» запити)."""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    last_err = None
+    for attempt in range(retries + 1):
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return r.read()
+        except Exception as e:
+            last_err = e
+            if attempt < retries:
+                time.sleep(2 * (attempt + 1))  # 2с, потім 4с
+    raise last_err
 
 def parse_feed(name, url, group, cutoff):
     items = []
