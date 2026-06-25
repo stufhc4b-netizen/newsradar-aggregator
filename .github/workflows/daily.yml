@@ -32,4 +32,6 @@ jobs:
           git add digest-feed.json
           # комітимо лише якщо є зміни
           git diff --staged --quiet || git commit -m "Daily aggregate: $(date -u +'%Y-%m-%d %H:%M UTC')"
+          # підтягнути можливі ручні зміни, тоді запушити (усуває конфлікт «fetch first»)
+          git pull --rebase origin main
           git push
