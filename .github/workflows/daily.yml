@@ -1,0 +1,35 @@
+name: NewsRadar Daily Aggregate
+
+on:
+  schedule:
+    # 04:00 UTC = 07:00 за Києвом (EEST, літній час UTC+3).
+    # Узимку (EET, UTC+2) це буде 06:00 за Києвом — за потреби змінити на "0 05 * * *".
+    - cron: "0 04 * * *"
+  workflow_dispatch: {}   # дозволяє запуск вручну кнопкою в інтерфейсі GitHub
+
+permissions:
+  contents: write          # щоб workflow міг комітити оновлений JSON
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run aggregator
+        run: python aggregate.py
+
+      - name: Commit & push aggregate
+        run: |
+          git config user.name  "newsradar-bot"
+          git config user.email "actions@github.com"
+          git add digest-feed.json
+          # комітимо лише якщо є зміни
+          git diff --staged --quiet || git commit -m "Daily aggregate: $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push
