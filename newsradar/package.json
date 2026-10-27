@@ -1,0 +1,6 @@
+{
+  "name": "newsradar-digest",
+  "private": true,
+  "description": "Верстка дайджестів NewsRadar",
+  "dependencies": { "docx": "9.9.0" }
+}

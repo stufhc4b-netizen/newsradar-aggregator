@@ -1,0 +1,38 @@
+{
+  "type": "country",
+  "country": "Грузія",
+  "code": "georgia",
+  "date_iso": "2026-10-27",
+  "date_label": "27 жовтня 2026",
+  "period_label": "26–27 жовтня 2026",
+  "issue": "щоденний випуск",
+  "lead_title": "Головне за добу",
+  "lead": "2–4 речення: що головне за добу і чому це наслідково.",
+  "items": [
+    {
+      "title": "Конституційний суд розглядає заборону всієї опозиції",
+      "sig": "КРИТИЧНО",
+      "paywall": false,
+      "text": "Переказ своїми словами, 80–180 слів: факти, дати, цифри, контекст.",
+      "quote": { "text": "Це кінець демократії для Грузії", "attr": "Іраклій Павленішвілі, заступник голови ЄНР (AP, переклад з англ.)" },
+      "sources": [
+        { "label": "AP", "url": "https://www.arabnews.pk/world/georgias-top-court-hears-lawsuit-to-ban-main-opposition-parties-in-latest-crackdown-on-dissent-3004877" },
+        { "label": "Civil.ge", "url": "https://civil.ge/archives/754671" }
+      ]
+    },
+    {
+      "title": "Другий сюжет",
+      "sig": "УВАГА",
+      "text": "Переказ…",
+      "quote": null,
+      "sources": [ { "label": "OC Media", "url": "https://oc-media.org/" } ]
+    }
+  ],
+  "ukraine": [
+    "1–2 абзаци: як сюжети прямо чи опосередковано впливають на Україну."
+  ],
+  "watch": [
+    { "marker": "Слухання Конституційного суду щодо заборони опозиції", "when": "з 26 жовтня" },
+    { "marker": "Пакет розширення ЄС: оцінка Грузії", "when": "очікується наприкінці жовтня" }
+  ]
+}

@@ -1,0 +1,8 @@
+#!/bin/bash
+# Setup script для середовища NewsRadar у Claude Code
+# Встановлює LibreOffice (для PDF) і шрифти з кирилицею
+export DEBIAN_FRONTEND=noninteractive
+SUDO=""; [ "$(id -u)" != "0" ] && command -v sudo >/dev/null && SUDO="sudo"
+$SUDO apt-get update -y >/dev/null 2>&1
+$SUDO apt-get install -y --no-install-recommends libreoffice-writer fonts-liberation fonts-dejavu-core >/dev/null 2>&1 || true
+exit 0
