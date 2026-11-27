@@ -3,10 +3,12 @@
 // Використання: node build_dovidka.js <файл.json> <папка_виводу>
 // Друкує JSON: {"docx": "...", "base": "...", "caption": "..."}
 //
-// Оформлення зашите за вимогами замовника і НЕ береться з JSON:
-// A4; поля 2/2/3/1 см; Times New Roman 14 (таблиці 11); заголовки розділів жирні;
-// основний текст по ширині з відступом першого рядка 1 см; номер сторінки –
-// внизу по центру, лише цифра; тире – лише середнє «–».
+// Оформлення зашите за еталонним зразком і НЕ береться з JSON:
+// A4; поля 2/2/3/1 см; Times New Roman 14 (таблиці й підписи 11–12);
+// «ДОВІДКА» 15 пт жирним по центру, під нею підзаголовок 14 пт жирним;
+// заголовки розділів жирні зліва; текст по ширині з відступом 1 см;
+// списки – «•» з відступом 1 см; номер сторінки внизу по центру, лише цифра.
+// У будь-якому тексті **жирний** виділяється зірочками.
 "use strict";
 const fs = require("fs");
 const path = require("path");
@@ -15,17 +17,19 @@ const {
   Footer, AlignmentType, BorderStyle, WidthType, ShadingType, VerticalAlign, PageNumber
 } = require("docx");
 
-// ---------- типографіка ----------
+// ---------- типографіка (за зразком) ----------
 const FONT = "Times New Roman";
-const BODY = 28;            // 14 pt
-const TBL  = 22;            // 11 pt
+const H1   = 30;   // 15 пт – слово «ДОВІДКА»
+const BODY = 28;   // 14 пт – основний текст, заголовки розділів, списки
+const CAP  = 24;   // 12 пт – підпис таблиці, колонтитул, рядок джерел
+const TBL  = 22;   // 11 пт – вміст таблиць
 const INK  = "000000";
-const RULE = "808080";
-const PG_W = 11906, PG_H = 16838;              // A4
-const M_TOP = 1134, M_BOT = 1134;              // 2 см
-const M_LEFT = 1701, M_RIGHT = 567;            // 3 см / 1 см
-const CW = PG_W - M_LEFT - M_RIGHT;
-const IND = { firstLine: 567 };                // 1 см
+const GRID = "808080";
+const HEAD_FILL = "D9D9D9";
+const PG_W = 11906, PG_H = 16838;             // A4
+const M_TOP = 1134, M_BOT = 1134;             // 2 см
+const M_LEFT = 1701, M_RIGHT = 567;           // 3 см / 1 см
+const CW = PG_W - M_LEFT - M_RIGHT;           // 9638
 
 // ---------- дані ----------
 function clean(v) {
@@ -40,89 +44,111 @@ const D = clean(JSON.parse(fs.readFileSync(process.argv[2], "utf8")));
 const outDir = process.argv[3] || "out";
 fs.mkdirSync(outDir, { recursive: true });
 
-// ---------- будівельні блоки ----------
-const run = (t, o = {}) => new TextRun({ text: String(t ?? ""), font: FONT, size: BODY, color: INK, ...o });
+// **жирний** усередині тексту -> набір TextRun
+function runs(text, o = {}) {
+  const size = o.size || BODY;
+  return String(text ?? "").split(/(\*\*[^*]+\*\*)/g).filter(Boolean).map(part => {
+    const b = /^\*\*[^*]+\*\*$/.test(part);
+    return new TextRun({
+      text: b ? part.slice(2, -2) : part,
+      font: FONT, size, color: INK,
+      bold: b || !!o.bold, italics: !!o.italics,
+    });
+  });
+}
 
-// абзац основного тексту: по ширині, відступ першого рядка 1 см
+// ---------- блоки ----------
 const body = (t) => new Paragraph({
-  alignment: AlignmentType.JUSTIFIED, indent: IND,
-  spacing: { after: 80, line: 276 }, children: [run(t)],
+  alignment: AlignmentType.JUSTIFIED, indent: { firstLine: 567 },
+  spacing: { after: 60, line: 276 }, children: runs(t),
 });
 
-// заголовок розділу: жирний, без відступу першого рядка
 const heading = (t) => new Paragraph({
-  keepNext: true, spacing: { before: 220, after: 90 },
-  children: [run(t, { bold: true })],
+  keepNext: true, spacing: { before: 160, after: 80 },
+  children: runs(t, { bold: true }),
 });
 
-// пункт списку: без відступу першого рядка, з виступом
 const bullet = (t) => new Paragraph({
   alignment: AlignmentType.JUSTIFIED,
   indent: { left: 567, hanging: 283 },
-  spacing: { after: 70, line: 276 },
-  children: [run("– "), run(t)],
+  spacing: { after: 40, line: 264 },
+  children: [new TextRun({ text: "• ", font: FONT, size: BODY, color: INK }), ...runs(t)],
 });
 
-const thin = { style: BorderStyle.SINGLE, size: 4, color: RULE };
-const box = { top: thin, bottom: thin, left: thin, right: thin };
-const cellPar = (t, bold) => new Paragraph({
-  spacing: { line: 240 },
-  children: [new TextRun({ text: String(t ?? ""), font: FONT, size: TBL, bold: !!bold, color: INK })],
+const caption = (t) => new Paragraph({
+  keepNext: true, spacing: { before: 120, after: 60 },
+  children: runs(t, { size: CAP, italics: true }),
 });
-function cell(t, w, opts = {}) {
+
+const gap = () => new Paragraph({ spacing: { after: 60 }, children: [] });
+
+const line = (c) => ({ style: BorderStyle.SINGLE, size: 4, color: c });
+const cellBorders = { top: line(GRID), bottom: line(GRID), left: line(GRID), right: line(GRID) };
+
+function cell(text, w, head) {
   return new TableCell({
-    width: { size: w, type: WidthType.DXA }, borders: box,
-    margins: { top: 60, bottom: 60, left: 100, right: 100 },
+    width: { size: w, type: WidthType.DXA }, borders: cellBorders,
+    margins: { top: 40, bottom: 40, left: 80, right: 80 },
     verticalAlign: VerticalAlign.CENTER,
-    shading: opts.fill ? { fill: opts.fill, type: ShadingType.CLEAR } : undefined,
-    children: [cellPar(t, opts.bold)],
+    shading: head ? { fill: HEAD_FILL, type: ShadingType.CLEAR } : undefined,
+    children: [new Paragraph({ spacing: { line: 240 }, children: runs(text, { size: TBL, bold: !!head }) })],
   });
 }
+
 function table(t) {
   const cols = t.headers.length;
   const weights = (t.widths && t.widths.length === cols) ? t.widths : Array(cols).fill(1);
   const sum = weights.reduce((a, b) => a + b, 0);
   const w = weights.map(x => Math.round(CW * x / sum));
-  const rows = [new TableRow({
-    tableHeader: true,
-    children: t.headers.map((h, i) => cell(h, w[i], { bold: true, fill: "E8E8E8" })),
-  })];
-  (t.rows || []).forEach(r => rows.push(new TableRow({
-    children: r.slice(0, cols).map((c, i) => cell(c, w[i])),
-  })));
+  const rows = [new TableRow({ tableHeader: true, children: t.headers.map((h, i) => cell(h, w[i], true)) })];
+  (t.rows || []).forEach(r => rows.push(new TableRow({ children: r.slice(0, cols).map((c, i) => cell(c, w[i], false)) })));
   return new Table({ width: { size: CW, type: WidthType.DXA }, columnWidths: w, rows });
 }
 
 // ---------- складання ----------
 const C = [];
 
-// заголовок довідки
 C.push(new Paragraph({
-  alignment: AlignmentType.CENTER, spacing: { after: 260 },
-  children: [run(D.title, { bold: true })],
+  alignment: AlignmentType.CENTER, spacing: { after: 60 },
+  children: runs(D.title || "ДОВІДКА", { bold: true, size: H1 }),
 }));
+if (D.subtitle) {
+  C.push(new Paragraph({
+    alignment: AlignmentType.CENTER, spacing: { after: 200 },
+    children: runs(D.subtitle, { bold: true }),
+  }));
+}
 
+let tblNo = 0;
 (D.sections || []).forEach((s, idx) => {
   const num = s.number || (idx + 1);
   C.push(heading(s.heading ? `${num}. ${s.heading}` : String(num)));
   (s.paragraphs || []).forEach(p => C.push(body(p)));
   (s.bullets || []).forEach(b => C.push(bullet(b)));
   if (s.table && s.table.headers) {
-    C.push(new Paragraph({ spacing: { after: 60 }, children: [] }));
+    tblNo += 1;
+    C.push(caption(s.table.caption || `Таблиця ${tblNo}`));
     C.push(table(s.table));
-    C.push(new Paragraph({ spacing: { after: 60 }, children: [] }));
+    C.push(gap());
   }
   (s.after || []).forEach(p => C.push(body(p)));
+  (s.after_bullets || []).forEach(b => C.push(bullet(b)));
 });
+
+if (D.sources) {
+  C.push(new Paragraph({
+    alignment: AlignmentType.JUSTIFIED, spacing: { before: 120, after: 40 },
+    children: runs(D.sources, { size: CAP }),
+  }));
+}
 
 const doc = new Document({
   styles: { default: { document: { run: { font: FONT, size: BODY, color: INK } } } },
   sections: [{
     properties: { page: { size: { width: PG_W, height: PG_H }, margin: { top: M_TOP, right: M_RIGHT, bottom: M_BOT, left: M_LEFT } } },
-    // номер сторінки – внизу по центру, лише цифра
     footers: { default: new Footer({ children: [new Paragraph({
       alignment: AlignmentType.CENTER,
-      children: [new TextRun({ children: [PageNumber.CURRENT], font: FONT, size: TBL, color: INK })],
+      children: [new TextRun({ children: [PageNumber.CURRENT], font: FONT, size: CAP, color: INK })],
     })] }) },
     children: C,
   }],
@@ -132,5 +158,5 @@ const base = D.base || "Довідка";
 const docxPath = path.join(outDir, base + ".docx");
 Packer.toBuffer(doc).then(buf => {
   fs.writeFileSync(docxPath, buf);
-  process.stdout.write(JSON.stringify({ docx: docxPath, base, caption: D.caption || D.title }));
+  process.stdout.write(JSON.stringify({ docx: docxPath, base, caption: D.caption || D.subtitle || D.title }));
 }).catch(e => { console.error("BUILD ERROR:", e.message); process.exit(1); });
